@@ -26,12 +26,12 @@ func (r *reader) Read(p []byte) (n int, err error) {
 	n, err = 0, nil
 
 	// Block until available data or error
-	if len(r.sb.buf) == 0 && !r.sb.closed {
+	for !r.availableData() && !r.sb.closed {
 		r.sb.lock.Unlock()
 		<-r.sb.newData
 		r.sb.lock.Lock()
 	}
-	if len(r.sb.buf) == 0 && r.sb.closed {
+	if !r.availableData() && r.sb.closed {
 		return 0, io.EOF
 	}
 
@@ -60,6 +60,12 @@ func (r *reader) Close() error {
 	r.sb = nil
 
 	return nil
+}
+
+// availableData returns true if the buffer has new data after the reader's
+// current position
+func (r *reader) availableData() bool {
+	return r.at < r.sb.start+len(r.sb.buf)
 }
 
 /*

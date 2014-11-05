@@ -43,12 +43,19 @@ func New() *SharedBuffer {
 // NewReader creates a registered reader for the buffer. This reader must be
 // closed when it is done, lest you hate having free memory.
 func (sb *SharedBuffer) NewReader() io.ReadCloser {
+	return sb.NewReaderAt(int64(sb.start))
+}
+
+// NewReaderAt generates a registered reader which will block until the buffer
+// fills to the given offset
+func (sb *SharedBuffer) NewReaderAt(off int64) io.ReadCloser {
 	sb.lock.Lock()
 	defer sb.lock.Unlock()
 
 	r := &reader{
 		idx: len(sb.readers),
 		sb:  sb,
+		at:  int(off),
 	}
 	sb.readers = append(sb.readers, r)
 	heap.Fix(&sb.readers, r.idx)
@@ -66,12 +73,7 @@ func (sb *SharedBuffer) Write(p []byte) (n int, err error) {
 	}
 
 	sb.buf = append(sb.buf, p...)
-
-	// Signal we have new data to any blocked readers
-	select {
-	case sb.newData <- struct{}{}:
-	default:
-	}
+	sb.signalNewData()
 
 	return len(p), nil
 }
@@ -80,7 +82,17 @@ func (sb *SharedBuffer) Write(p []byte) (n int, err error) {
 // after consuming the remainder.
 func (sb *SharedBuffer) Close() error {
 	sb.closed = true
+	sb.signalNewData()
+
 	return nil
+}
+
+// signalNewData unblocks waiting readers, allowing them to handle any new data
+func (sb *SharedBuffer) signalNewData() {
+	select {
+	case sb.newData <- struct{}{}:
+	default:
+	}
 }
 
 // flush any collectively read data

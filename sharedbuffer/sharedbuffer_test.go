@@ -1,9 +1,10 @@
 package sharedbuffer
 
 import (
-	"crypto/rand"
+	randbytes "crypto/rand"
 	. "github.com/smartystreets/goconvey/convey"
 	"io"
+	"math/rand"
 	"testing"
 	"time"
 )
@@ -12,7 +13,7 @@ var TEST_BUFFER_SIZE = 1024
 
 func TestSharedBufferIntegrity(t *testing.T) {
 	in := make([]byte, TEST_BUFFER_SIZE)
-	rand.Read(in)
+	randbytes.Read(in)
 
 	Convey("Given a filled SharedBuffer", t, func() {
 		sb := New()
@@ -55,7 +56,7 @@ func TestSharedBufferIntegrity(t *testing.T) {
 
 func TestSharedBufferFlushing(t *testing.T) {
 	in := make([]byte, TEST_BUFFER_SIZE)
-	rand.Read(in)
+	randbytes.Read(in)
 
 	Convey("Given a SharedBuffer and two readers", t, func() {
 		sb := New()
@@ -77,7 +78,7 @@ func TestSharedBufferFlushing(t *testing.T) {
 
 func TestSharedBufferBehavior(t *testing.T) {
 	in := make([]byte, TEST_BUFFER_SIZE)
-	rand.Read(in)
+	randbytes.Read(in)
 
 	Convey("Given a SharedBuffer and one reader", t, func() {
 		sb := New()
@@ -117,6 +118,46 @@ func TestSharedBufferBehavior(t *testing.T) {
 						So(err, ShouldEqual, io.EOF)
 					})
 				})
+			})
+		})
+	})
+}
+
+func TestReaderAt(t *testing.T) {
+	in := make([]byte, TEST_BUFFER_SIZE)
+	randbytes.Read(in)
+	offset := rand.Intn(TEST_BUFFER_SIZE-1) + 1
+
+	Convey("Given a SharedBuffer and an offset reader", t, func() {
+		sb := New()
+		r := sb.NewReaderAt(int64(offset))
+
+		Convey("The reader should block if the buffer's data lies before the offset", func() {
+			sb.Write(in[:offset])
+
+			read := make(chan struct{})
+			go func() {
+				out := make([]byte, TEST_BUFFER_SIZE-offset)
+				r.Read(out)
+				read <- struct{}{}
+			}()
+
+			select {
+			case <-read:
+				So(false, ShouldBeTrue)
+			default:
+				So(true, ShouldBeTrue)
+			}
+
+			Convey("Then it should unblock after data arrives beyond the offset", func() {
+				sb.Write(in[offset:])
+
+				select {
+				case <-read:
+					So(true, ShouldBeTrue)
+				case <-time.After(time.Millisecond):
+					So(false, ShouldBeTrue)
+				}
 			})
 		})
 	})
