@@ -9,6 +9,7 @@ package sharedbuffer
 
 import (
 	"container/heap"
+	"errors"
 	"io"
 )
 
@@ -19,8 +20,14 @@ type reader struct {
 	sb  *SharedBuffer
 }
 
+var ErrClosedReader = errors.New("closed reader")
+
 // Read some data from the buffer. Will block until data is available or an error occurs
 func (r *reader) Read(p []byte) (n int, err error) {
+	if r.idx < 0 || r.sb == nil {
+		return 0, ErrClosedReader
+	}
+
 	r.sb.lock.Lock()
 	defer r.sb.lock.Unlock()
 	n, err = 0, nil
@@ -64,7 +71,7 @@ func (r *reader) Close() error {
 
 // availableData returns true if the buffer has new data after the reader's
 // current position
-func (r *reader) availableData() bool {
+func (r reader) availableData() bool {
 	return r.at < r.sb.start+len(r.sb.buf)
 }
 
@@ -98,9 +105,9 @@ func (rs *readers) Push(x interface{}) {
 func (rs *readers) Pop() interface{} {
 	h := *rs
 	l := len(h)
-	min := h[l-1]
+	p := h[l-1]
 	*rs = h[:l-1]
 
-	min.idx = -1
-	return min
+	p.idx = -1
+	return p
 }
