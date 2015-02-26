@@ -99,6 +99,6 @@ func (sb *SharedBuffer) signalNewData() {
 func (sb *SharedBuffer) flush() int {
 	slowestReader := sb.readers[0]
 	stale := slowestReader.at - sb.start
-	sb.buf = sb.buf[stale:]
+	sb.buf, sb.start = sb.buf[stale:], slowestReader.at
 	return stale
 }
