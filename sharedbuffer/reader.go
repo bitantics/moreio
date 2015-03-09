@@ -1,9 +1,9 @@
 /*
 SharedBuffer reader. What to know when creating such a reader:
 
-	1. Timeless access to all present and future buffer data
-	2. Close() must be called when it's done
-	3. Will return a EOF after the buffer is closed and all data has been read
+ 1. Timeless access to all present and future buffer data
+ 2. Close() must be called when it's done
+ 3. Will return a EOF after the buffer is closed and all data has been read
 */
 package sharedbuffer
 
@@ -44,8 +44,7 @@ func (r *reader) Read(p []byte) (n int, err error) {
 
 	// Copy data and move the reader's position in the buffer
 	readStart := r.at - r.sb.start
-	n = copy(p, r.sb.buf[readStart:])
-	r.at += n
+	r.at += copy(p, r.sb.buf[readStart:])
 
 	// Tell SharedBuffer to resort its readers
 	heap.Fix(&r.sb.readers, r.idx)
