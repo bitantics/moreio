@@ -24,7 +24,7 @@ var ErrClosedReader = errors.New("closed reader")
 
 // Read some data from the buffer. Will block until data is available or an error occurs
 func (r *reader) Read(p []byte) (n int, err error) {
-	if r.idx < 0 || r.sb == nil {
+	if r.sb == nil {
 		return 0, ErrClosedReader
 	}
 
@@ -44,7 +44,8 @@ func (r *reader) Read(p []byte) (n int, err error) {
 
 	// Copy data and move the reader's position in the buffer
 	readStart := r.at - r.sb.start
-	r.at += copy(p, r.sb.buf[readStart:])
+	n = copy(p, r.sb.buf[readStart:])
+	r.at += n
 
 	// Tell SharedBuffer to resort its readers
 	heap.Fix(&r.sb.readers, r.idx)

@@ -130,7 +130,8 @@ func TestReaderAt(t *testing.T) {
 
 	Convey("Given a SharedBuffer and an offset reader", t, func() {
 		sb := New()
-		r := sb.NewReaderAt(int64(offset))
+		r, err := sb.NewReaderAt(int64(offset))
+		So(err, ShouldBeNil)
 
 		Convey("The reader should block if the buffer's data lies before the offset", func() {
 			sb.Write(in[:offset])

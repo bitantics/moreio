@@ -16,7 +16,10 @@ import (
 	"sync"
 )
 
-var ErrClosedBuffer = errors.New("cannot write to closed buffer")
+var (
+	ErrClosedBuffer = errors.New("cannot write to closed buffer")
+	ErrLateReader   = errors.New("cannot create new reader starting at flushed offset")
+)
 
 // SharedBuffer represents a concurrently shared buffer
 type SharedBuffer struct {
@@ -43,14 +46,19 @@ func New() *SharedBuffer {
 // NewReader creates a registered reader for the buffer. This reader must be
 // closed when it is done, lest you hate having free memory.
 func (sb *SharedBuffer) NewReader() io.ReadCloser {
-	return sb.NewReaderAt(int64(sb.start))
+	r, _ := sb.NewReaderAt(int64(sb.start))
+	return r
 }
 
 // NewReaderAt generates a registered reader which will block until the buffer
 // fills to the given offset
-func (sb *SharedBuffer) NewReaderAt(off int64) io.ReadCloser {
+func (sb *SharedBuffer) NewReaderAt(off int64) (io.ReadCloser, error) {
 	sb.lock.Lock()
 	defer sb.lock.Unlock()
+
+	if off < int64(sb.start) {
+		return nil, ErrLateReader
+	}
 
 	r := &reader{
 		idx: len(sb.readers),
@@ -60,7 +68,7 @@ func (sb *SharedBuffer) NewReaderAt(off int64) io.ReadCloser {
 	sb.readers = append(sb.readers, r)
 	heap.Fix(&sb.readers, r.idx)
 
-	return r
+	return r, nil
 }
 
 // Write puts data into the open buffer
