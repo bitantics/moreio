@@ -15,22 +15,24 @@ import (
 	"io"
 )
 
+type reader struct {
+	reader io.Reader
+	err    error
+}
+
 // RollingReader stores its included io.Readers
 type RollingReader struct {
-	readers   []io.Reader
+	readers   []reader
 	newReader chan struct{}
 }
 
 var ErrClosedReader = errors.New("closed reader")
 
-// closer is a nonexistent reader which acts as a delimiter
-var closer *RollingReader
-
 // New creates a RollingReader given any number of starting readers.
 // They are read from in order.
 func New(readers ...io.Reader) *RollingReader {
 	rr := &RollingReader{
-		readers:   make([]io.Reader, 0),
+		readers:   make([]reader, 0),
 		newReader: make(chan struct{}),
 	}
 
@@ -42,9 +44,19 @@ func New(readers ...io.Reader) *RollingReader {
 
 // Add a reader to be consumed last
 func (rr *RollingReader) Add(r io.Reader) error {
+	return rr.add(reader{r, nil})
+}
+
+// AddError which will return an error when consumed
+func (rr *RollingReader) AddError(err error) {
+	rr.add(reader{nil, err})
+}
+
+// add a reader or error to the queue
+func (rr *RollingReader) add(r reader) error {
 	// Can't add to a closed RollingReader
 	readersN := len(rr.readers)
-	if readersN > 0 && rr.readers[readersN-1] == closer {
+	if readersN > 0 && rr.readers[readersN-1].err == io.EOF {
 		return ErrClosedReader
 	}
 
@@ -61,7 +73,7 @@ func (rr *RollingReader) Add(r io.Reader) error {
 
 // Close the RollingReader, preventing any further reader additions
 func (rr *RollingReader) Close() error {
-	rr.Add(closer)
+	rr.AddError(io.EOF)
 	return nil
 }
 
@@ -75,11 +87,11 @@ func (rr *RollingReader) Read(p []byte) (n int, err error) {
 	}
 
 	reader := rr.readers[0]
-	if reader == closer {
-		return 0, io.EOF
+	if reader.err != nil {
+		return 0, reader.err
 	}
 
-	if n, err = reader.Read(p); err == io.EOF {
+	if n, err = reader.reader.Read(p); err == io.EOF {
 		rr.readers = rr.readers[1:]
 		err = nil
 	}
